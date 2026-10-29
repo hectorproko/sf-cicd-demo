@@ -1,0 +1,48 @@
+parameters:
+  - name: name
+    type: string
+  - name: displayName
+    type: string
+  - name: condition
+    type: string
+  - name: variableGroup
+    type: string
+  - name: keyFile
+    type: string
+  - name: action
+    type: string
+    values: [validate, deploy]
+  - name: environment
+    type: string
+    default: ''
+
+stages:
+  - stage: ${{ parameters.name }}
+    displayName: ${{ parameters.displayName }}
+    dependsOn: []
+    condition: ${{ parameters.condition }}
+    variables:
+      - group: ${{ parameters.variableGroup }}
+    jobs:
+      - ${{ if eq(parameters.action, 'validate') }}:
+        - job: validate
+          displayName: Check-only deploy + Apex tests
+          steps:
+            - checkout: self
+            - template: sf-steps.yml
+              parameters:
+                keyFile: ${{ parameters.keyFile }}
+                command: validate
+      - ${{ else }}:
+        - deployment: deploy
+          displayName: Deploy + Apex tests
+          environment: ${{ parameters.environment }}
+          strategy:
+            runOnce:
+              deploy:
+                steps:
+                  - checkout: self
+                  - template: sf-steps.yml
+                    parameters:
+                      keyFile: ${{ parameters.keyFile }}
+                      command: start
