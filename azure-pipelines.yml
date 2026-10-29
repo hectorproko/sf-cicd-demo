@@ -1,0 +1,48 @@
+trigger:
+  branches:
+    include: [develop, main]
+
+# Azure Repos ignores the pr: keyword. PR validation comes from branch policies (Step 3).
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - template: pipelines/templates/sf-stage.yml
+    parameters:
+      name: ValidateQA
+      displayName: Validate against QA (PR into develop)
+      condition: and(eq(variables['Build.Reason'], 'PullRequest'), ne(variables['System.PullRequest.TargetBranch'], 'refs/heads/main'))
+      variableGroup: sf-qa
+      keyFile: server-qa.key
+      action: validate
+
+  - template: pipelines/templates/sf-stage.yml
+    parameters:
+      name: ValidatePROD
+      displayName: Validate against PROD (PR into main)
+      condition: and(eq(variables['Build.Reason'], 'PullRequest'), eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/main'))
+      variableGroup: sf-prod
+      keyFile: server-prod.key
+      action: validate
+
+  - template: pipelines/templates/sf-stage.yml
+    parameters:
+      name: DeployQA
+      displayName: Deploy to QA (merge to develop)
+      condition: and(ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
+      variableGroup: sf-qa
+      keyFile: server-qa.key
+      action: deploy
+      environment: qa
+
+  - template: pipelines/templates/sf-stage.yml
+    parameters:
+      name: DeployPROD
+      displayName: Deploy to PROD (merge to main, approval required)
+      condition: and(ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+      variableGroup: sf-prod
+      keyFile: server-prod.key
+      action: deploy
+      environment: prod

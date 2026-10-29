@@ -1,0 +1,54 @@
+parameters:
+  - name: keyFile
+    type: string
+  - name: command        # validate = check-only, start = real deploy
+    type: string
+    values: [validate, start]
+
+steps:
+  - task: DownloadSecureFile@1
+    name: jwtKey
+    inputs:
+      secureFile: ${{ parameters.keyFile }}
+
+  - bash: |
+      set -euo pipefail
+      command -v sf >/dev/null || npm install --global @salesforce/cli
+      sf --version
+      sf org login jwt --username "$SF_USERNAME" \
+        --jwt-key-file "$(jwtKey.secureFilePath)" \
+        --client-id "$SF_CLIENT_ID" \
+        --instance-url "$SF_INSTANCE_URL" --alias target
+    displayName: Authenticate to Salesforce (JWT)
+    env:
+      SF_CLIENT_ID: $(SF_CLIENT_ID)
+
+  - bash: |
+      set -euo pipefail
+      sf project deploy ${{ parameters.command }} \
+        --source-dir force-app \
+        --target-org target \
+        --test-level RunLocalTests \
+        --junit --coverage-formatters cobertura \
+        --results-dir "$(Build.ArtifactStagingDirectory)/sf-results" \
+        --wait 30
+    displayName: sf project deploy ${{ parameters.command }}
+
+  - task: PublishTestResults@2
+    displayName: Publish Apex test results
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: '**/junit.xml'
+      searchFolder: $(Build.ArtifactStagingDirectory)/sf-results
+      testRunTitle: $(System.StageDisplayName) Apex tests
+
+  - task: PublishCodeCoverageResults@2
+    displayName: Publish Apex code coverage
+    condition: succeededOrFailed()
+    inputs:
+      summaryFileLocation: $(Build.ArtifactStagingDirectory)/sf-results/coverage/**/cobertura.xml
+
+  - bash: sf org logout --target-org target --no-prompt || true
+    displayName: Logout
+    condition: always()
