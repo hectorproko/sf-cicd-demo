@@ -58,7 +58,9 @@ private class ExpenseServiceTest {
         System.runAs(userWithExpenseAccess()) {
             List<Expense__c> expenses = new List<Expense__c>();
             for (Integer i = 0; i < 200; i++) {
-                expenses.add(new Expense__c(Amount__c = Math.mod(i, 2) == 0 ? 50 : T + 1));
+                expenses.add(new Expense__c(
+                    Amount__c = Math.mod(i, 2) == 0 ? 50 : T + 1,
+                    Category__c = 'Other'));
             }
             Test.startTest();
             insert expenses;
@@ -67,4 +69,17 @@ private class ExpenseServiceTest {
             Assert.areEqual(100, flagged, 'Half of 200 records should be flagged');
         }
     }
+
+    @isTest                              
+    static void requiresCategory() {
+        System.runAs(userWithExpenseAccess()) {
+            try {
+                insert new Expense__c(Amount__c = 100);
+                Assert.fail('Insert without Category should be blocked');
+            } catch (DmlException e) {
+                Assert.isTrue(e.getMessage().contains('Category is required'), e.getMessage());
+            }
+        }
+    }   
+
 }
