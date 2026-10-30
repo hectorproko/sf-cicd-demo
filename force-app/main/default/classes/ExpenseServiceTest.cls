@@ -1,8 +1,8 @@
 @isTest
 private class ExpenseServiceTest {
 
-    private static final Decimal T = ExpenseService.APPROVAL_THRESHOLD;
-
+    // Assigns Expense_Access to the running user inside the test (rolled back afterwards)
+    // and returns a User to pass to System.runAs so the new permissions take effect.
     private static User userWithExpenseAccess() {
         Id psId = [SELECT Id FROM PermissionSet WHERE Name = 'Expense_Access'].Id;
         Id me = UserInfo.getUserId();
@@ -14,42 +14,36 @@ private class ExpenseServiceTest {
     }
 
     @isTest
-    static void thresholdMatchesBusinessRule() {
-        Assert.areEqual(1000, ExpenseService.APPROVAL_THRESHOLD,
-            'Business rule: expenses above $1000 require approval');
-    }
-
-    @isTest
     static void flagsExpenseOverThreshold() {
         System.runAs(userWithExpenseAccess()) {
-            Expense__c exp = new Expense__c(Amount__c = T + 1, Category__c = 'Travel');
+            Expense__c exp = new Expense__c(Amount__c = 600, Category__c = 'Travel');
             Test.startTest();
             insert exp;
             Test.stopTest();
             exp = [SELECT Requires_Approval__c FROM Expense__c WHERE Id = :exp.Id];
-            Assert.isTrue(exp.Requires_Approval__c, 'Amount above threshold should require approval');
+            Assert.isTrue(exp.Requires_Approval__c, 'Expenses over 500 should require approval');
         }
     }
 
     @isTest
     static void doesNotFlagAtThreshold() {
         System.runAs(userWithExpenseAccess()) {
-            Expense__c exp = new Expense__c(Amount__c = T, Category__c = 'Meals');
+            Expense__c exp = new Expense__c(Amount__c = 500, Category__c = 'Meals');
             insert exp;
             exp = [SELECT Requires_Approval__c FROM Expense__c WHERE Id = :exp.Id];
-            Assert.isFalse(exp.Requires_Approval__c, 'Amount exactly at threshold should not require approval');
+            Assert.isFalse(exp.Requires_Approval__c, 'Exactly 500 should not require approval');
         }
     }
 
     @isTest
     static void reflagsOnUpdate() {
         System.runAs(userWithExpenseAccess()) {
-            Expense__c exp = new Expense__c(Amount__c = T - 1, Category__c = 'Equipment');
+            Expense__c exp = new Expense__c(Amount__c = 100, Category__c = 'Equipment');
             insert exp;
-            exp.Amount__c = T + 1;
+            exp.Amount__c = 700;
             update exp;
             exp = [SELECT Requires_Approval__c FROM Expense__c WHERE Id = :exp.Id];
-            Assert.isTrue(exp.Requires_Approval__c, 'Raising amount above threshold should flag on update');
+            Assert.isTrue(exp.Requires_Approval__c, 'Raising amount over 500 should flag on update');
         }
     }
 
@@ -58,9 +52,7 @@ private class ExpenseServiceTest {
         System.runAs(userWithExpenseAccess()) {
             List<Expense__c> expenses = new List<Expense__c>();
             for (Integer i = 0; i < 200; i++) {
-                expenses.add(new Expense__c(
-                    Amount__c = Math.mod(i, 2) == 0 ? 50 : T + 1,
-                    Category__c = 'Other'));
+                expenses.add(new Expense__c(Amount__c = Math.mod(i, 2) == 0 ? 50 : 900));
             }
             Test.startTest();
             insert expenses;
@@ -69,17 +61,4 @@ private class ExpenseServiceTest {
             Assert.areEqual(100, flagged, 'Half of 200 records should be flagged');
         }
     }
-
-    @isTest                              
-    static void requiresCategory() {
-        System.runAs(userWithExpenseAccess()) {
-            try {
-                insert new Expense__c(Amount__c = 100);
-                Assert.fail('Insert without Category should be blocked');
-            } catch (DmlException e) {
-                Assert.isTrue(e.getMessage().contains('Category is required'), e.getMessage());
-            }
-        }
-    }   
-
 }

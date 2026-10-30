@@ -1,5 +1,5 @@
 public with sharing class ExpenseService {
-    public static final Decimal APPROVAL_THRESHOLD = 1000;
+    public static final Decimal APPROVAL_THRESHOLD = 500;
 
     public static void flagForApproval(List<Expense__c> expenses) {
         for (Expense__c exp : expenses) {
