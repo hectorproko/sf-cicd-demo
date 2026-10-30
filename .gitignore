@@ -51,3 +51,4 @@ test-results/
 # JWT secrets
 *.key
 *.pem
+manifest/package.xml
