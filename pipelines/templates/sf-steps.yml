@@ -25,8 +25,15 @@ steps:
 
   - bash: |
       set -euo pipefail
-      sf project deploy ${{ parameters.command }} \
-        --source-dir force-app \
+      if [ -f manifest/destructiveChangesPre.xml ]; then
+        echo "Destructive changes found:"
+        cat manifest/destructiveChangesPre.xml
+        sf project generate manifest --source-dir force-app --name package --output-dir manifest
+        SCOPE=(--manifest manifest/package.xml --pre-destructive-changes manifest/destructiveChangesPre.xml)
+      else
+        SCOPE=(--source-dir force-app)
+      fi
+      sf project deploy ${{ parameters.command }} "${SCOPE[@]}" \
         --target-org target \
         --test-level RunLocalTests \
         --junit --coverage-formatters cobertura \
